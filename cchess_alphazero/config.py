@@ -36,16 +36,17 @@ class ResourceConfig:
 
         self.model_dir = os.environ.get("MODEL_DIR", os.path.join(self.data_dir, "model"))
         self.model_best_config_path = os.path.join(self.model_dir, "model_best_config.json")
-        self.model_best_weight_path = os.path.join(self.model_dir, "model_best_weight.h5")
+        # 使用PyTorch的.pth格式保存模型权重
+        self.model_best_weight_path = os.path.join(self.model_dir, "model_best_weight.pth")
         self.sl_best_config_path = os.path.join(self.model_dir, "sl_best_config.json")
-        self.sl_best_weight_path = os.path.join(self.model_dir, "sl_best_weight.h5")
+        self.sl_best_weight_path = os.path.join(self.model_dir, "sl_best_weight.pth")
         self.eleeye_path = os.path.join(self.model_dir, 'ELEEYE')
 
         self.next_generation_model_dir = os.path.join(self.model_dir, "next_generation")
         self.next_generation_config_path = os.path.join(self.next_generation_model_dir, "next_generation_config.json")
-        self.next_generation_weight_path = os.path.join(self.next_generation_model_dir, "next_generation_weight.h5")
+        self.next_generation_weight_path = os.path.join(self.next_generation_model_dir, "next_generation_weight.pth")
         self.rival_model_config_path = os.path.join(self.model_dir, "rival_config.json")
-        self.rival_model_weight_path = os.path.join(self.model_dir, "rival_weight.h5")
+        self.rival_model_weight_path = os.path.join(self.model_dir, "rival_weight.pth")
 
         self.play_data_dir = os.path.join(self.data_dir, "play_data")
         self.play_data_filename_tmpl = "play_%s.json"
@@ -105,19 +106,26 @@ class PlayWithHumanConfig:
         pc.dirichlet_alpha = self.dirichlet_alpha
 
 class InternetConfig:
+    """
+    网络配置类
+    
+    注意：远程服务器的模型权重URL可能需要更新为.pth格式，
+    或者在下载后进行格式转换。当前URL指向.h5格式是为了
+    兼容现有服务器，本地保存时会转换为.pth格式。
+    """
     def __init__(self):
         self.distributed = False
         self.username = getpass.getuser()
         self.base_url = 'https://cczero.org'
         self.upload_url = f'{self.base_url}/api/upload_game_file/192x10'
         self.upload_eval_url = f'{self.base_url}/api/upload_eval_game_file'
+        # 注意：远程服务器URL可能需要更新为.pth格式
+        # 或者需要实现权重格式转换功能
         self.download_url = f'http://download.52coding.com.cn/192x10/model_best_weight.h5'
-        # self.download_url = 'http://alphazero-1251776088.cossh.myqcloud.com/model/128x7/model_best_weight.h5'
         self.get_latest_digest = f'{self.base_url}/api/get_latest_digest/192x10'
         self.add_model_url = f'{self.base_url}/api/add_model'
         self.get_evaluate_model_url = f'{self.base_url}/api/query_for_evaluate'
         self.download_base_url = f'http://download.52coding.com.cn/'
-        # self.download_base_url = 'http://alphazero-1251776088.cossh.myqcloud.com/model/'
         self.get_elo_url = f'{self.base_url}/api/get_elo/'
         self.update_elo_url = f'{self.base_url}/api/add_eval_result/'
 

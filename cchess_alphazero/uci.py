@@ -1,3 +1,15 @@
+"""
+中国象棋UCI协议接口模块
+
+本模块实现了UCI (Universal Chess Interface) 协议，
+使中国象棋AlphaZero引擎可以与各种象棋GUI软件兼容。
+
+主要功能：
+- UCI协议命令解析和响应
+- 棋局位置设置和搜索
+- 与PyTorch模型集成进行走法预测
+"""
+
 import sys
 import os
 import numpy as np
@@ -18,7 +30,7 @@ if _PATH_ not in sys.path:
 from cchess_alphazero.config import Config, PlayWithHumanConfig
 from cchess_alphazero.lib.logger import setup_file_logger, setup_logger
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# 配置日志级别
 config_type = 'distribute'
 config = Config(config_type=config_type)
 config.opts.device_list = '0'

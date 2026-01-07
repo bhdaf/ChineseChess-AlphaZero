@@ -30,8 +30,7 @@ if _PATH_ not in sys.path:
 from cchess_alphazero.config import Config, PlayWithHumanConfig
 from cchess_alphazero.lib.logger import setup_file_logger, setup_logger
 
-# 禁用PyTorch的一些警告信息
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# 配置日志级别
 config_type = 'distribute'
 config = Config(config_type=config_type)
 config.opts.device_list = '0'

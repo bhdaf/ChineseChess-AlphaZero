@@ -25,7 +25,7 @@ from time import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, random_split
 
 import cchess_alphazero.environment.static_env as senv
 from cchess_alphazero.agent.model import CChessModel
@@ -146,7 +146,7 @@ class SupervisedWorker:
         # 分离验证集（2%）
         val_size = int(len(dataset) * 0.02)
         train_size = len(dataset) - val_size
-        train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+        train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
         
         train_loader = DataLoader(train_dataset, batch_size=tc.batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=tc.batch_size, shuffle=False)

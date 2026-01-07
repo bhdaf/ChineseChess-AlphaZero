@@ -106,19 +106,26 @@ class PlayWithHumanConfig:
         pc.dirichlet_alpha = self.dirichlet_alpha
 
 class InternetConfig:
+    """
+    网络配置类
+    
+    注意：远程服务器的模型权重URL可能需要更新为.pth格式，
+    或者在下载后进行格式转换。当前URL指向.h5格式是为了
+    兼容现有服务器，本地保存时会转换为.pth格式。
+    """
     def __init__(self):
         self.distributed = False
         self.username = getpass.getuser()
         self.base_url = 'https://cczero.org'
         self.upload_url = f'{self.base_url}/api/upload_game_file/192x10'
         self.upload_eval_url = f'{self.base_url}/api/upload_eval_game_file'
+        # 注意：远程服务器URL可能需要更新为.pth格式
+        # 或者需要实现权重格式转换功能
         self.download_url = f'http://download.52coding.com.cn/192x10/model_best_weight.h5'
-        # self.download_url = 'http://alphazero-1251776088.cossh.myqcloud.com/model/128x7/model_best_weight.h5'
         self.get_latest_digest = f'{self.base_url}/api/get_latest_digest/192x10'
         self.add_model_url = f'{self.base_url}/api/add_model'
         self.get_evaluate_model_url = f'{self.base_url}/api/query_for_evaluate'
         self.download_base_url = f'http://download.52coding.com.cn/'
-        # self.download_base_url = 'http://alphazero-1251776088.cossh.myqcloud.com/model/'
         self.get_elo_url = f'{self.base_url}/api/get_elo/'
         self.update_elo_url = f'{self.base_url}/api/add_eval_result/'
 

@@ -116,6 +116,10 @@ class PolicyValueNet(nn.Module):
         mc = config.model
         self.n_labels = n_labels
         
+        # 棋盘尺寸常量
+        self.BOARD_HEIGHT = 10  # 中国象棋棋盘高度
+        self.BOARD_WIDTH = 9    # 中国象棋棋盘宽度
+        
         # 输入通道数：14个特征平面（7种棋子x2方）
         self.input_channels = mc.input_depth
         # 残差块的通道数
@@ -124,6 +128,14 @@ class PolicyValueNet(nn.Module):
         self.res_layer_num = mc.res_layer_num
         # 价值头全连接层大小
         self.value_fc_size = mc.value_fc_size
+        
+        # 策略头和价值头的卷积通道数
+        self.policy_channels = 4
+        self.value_channels = 2
+        
+        # 计算全连接层的输入维度
+        self.policy_fc_input = self.policy_channels * self.BOARD_HEIGHT * self.BOARD_WIDTH
+        self.value_fc_input = self.value_channels * self.BOARD_HEIGHT * self.BOARD_WIDTH
         
         # ========================
         # 初始卷积层（Input Convolution）
@@ -148,19 +160,17 @@ class PolicyValueNet(nn.Module):
         # 策略头（Policy Head）
         # ========================
         # 1x1卷积降维 + 全连接层输出走法概率
-        self.policy_conv = nn.Conv2d(self.cnn_filter_num, 4, kernel_size=1, bias=False)
-        self.policy_bn = nn.BatchNorm2d(4)
-        # 棋盘大小为10x9，展平后为360维
-        self.policy_fc = nn.Linear(4 * 10 * 9, self.n_labels)
+        self.policy_conv = nn.Conv2d(self.cnn_filter_num, self.policy_channels, kernel_size=1, bias=False)
+        self.policy_bn = nn.BatchNorm2d(self.policy_channels)
+        self.policy_fc = nn.Linear(self.policy_fc_input, self.n_labels)
         
         # ========================
         # 价值头（Value Head）
         # ========================
         # 1x1卷积降维 + 全连接层输出局面评估
-        self.value_conv = nn.Conv2d(self.cnn_filter_num, 2, kernel_size=1, bias=False)
-        self.value_bn = nn.BatchNorm2d(2)
-        # 棋盘大小为10x9，展平后为180维
-        self.value_fc1 = nn.Linear(2 * 10 * 9, self.value_fc_size)
+        self.value_conv = nn.Conv2d(self.cnn_filter_num, self.value_channels, kernel_size=1, bias=False)
+        self.value_bn = nn.BatchNorm2d(self.value_channels)
+        self.value_fc1 = nn.Linear(self.value_fc_input, self.value_fc_size)
         self.value_fc2 = nn.Linear(self.value_fc_size, 1)
     
     def forward(self, x):

@@ -177,9 +177,10 @@ class OptimizeWorker:
         self.model.model.train()
         
         # 定义损失函数
-        # 策略损失：交叉熵损失（CrossEntropy）
+        # 策略损失：交叉熵损失（用于软标签/概率分布）
+        # 注意：nn.CrossEntropyLoss期望硬标签（类别索引），
+        # 但我们的策略目标是概率分布，所以使用手动计算的交叉熵
         # 价值损失：均方误差损失（MSE）
-        policy_criterion = nn.CrossEntropyLoss()
         value_criterion = nn.MSELoss()
         
         total_steps = 0
@@ -195,8 +196,9 @@ class OptimizeWorker:
                 # 前向传播
                 pred_policy, pred_value = self.model.model(batch_state)
                 
-                # 计算策略损失（使用KL散度或交叉熵）
-                # 注意：原始策略是概率分布，使用交叉熵需要先取log
+                # 计算策略损失（软标签交叉熵，等价于KL散度+常数）
+                # 公式：-sum(target * log(pred)) / batch_size
+                # 这里使用 +1e-8 避免 log(0) 产生数值问题
                 policy_loss = -torch.sum(batch_policy * torch.log(pred_policy + 1e-8)) / batch_policy.size(0)
                 
                 # 计算价值损失（MSE）
@@ -233,14 +235,16 @@ class OptimizeWorker:
         编译模型（设置优化器）
         
         使用Adam优化器，带有L2正则化（权重衰减）。
+        注意：Adam优化器通常使用较低的学习率（0.001-0.01）
         """
         # 使用Adam优化器，并设置L2正则化（weight_decay）
+        # Adam推荐学习率为0.001，比SGD的0.02低很多
         self.optimizer = optim.Adam(
             self.model.model.parameters(),
-            lr=0.02,
+            lr=0.001,  # Adam推荐的学习率
             weight_decay=self.config.model.l2_reg  # L2正则化
         )
-        logger.info(f"优化器已配置: Adam, 学习率=0.02, 权重衰减={self.config.model.l2_reg}")
+        logger.info(f"优化器已配置: Adam, 学习率=0.001, 权重衰减={self.config.model.l2_reg}")
 
     def update_learning_rate(self, total_steps):
         """

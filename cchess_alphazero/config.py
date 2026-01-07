@@ -36,16 +36,17 @@ class ResourceConfig:
 
         self.model_dir = os.environ.get("MODEL_DIR", os.path.join(self.data_dir, "model"))
         self.model_best_config_path = os.path.join(self.model_dir, "model_best_config.json")
-        self.model_best_weight_path = os.path.join(self.model_dir, "model_best_weight.h5")
+        # 使用PyTorch的.pth格式保存模型权重
+        self.model_best_weight_path = os.path.join(self.model_dir, "model_best_weight.pth")
         self.sl_best_config_path = os.path.join(self.model_dir, "sl_best_config.json")
-        self.sl_best_weight_path = os.path.join(self.model_dir, "sl_best_weight.h5")
+        self.sl_best_weight_path = os.path.join(self.model_dir, "sl_best_weight.pth")
         self.eleeye_path = os.path.join(self.model_dir, 'ELEEYE')
 
         self.next_generation_model_dir = os.path.join(self.model_dir, "next_generation")
         self.next_generation_config_path = os.path.join(self.next_generation_model_dir, "next_generation_config.json")
-        self.next_generation_weight_path = os.path.join(self.next_generation_model_dir, "next_generation_weight.h5")
+        self.next_generation_weight_path = os.path.join(self.next_generation_model_dir, "next_generation_weight.pth")
         self.rival_model_config_path = os.path.join(self.model_dir, "rival_config.json")
-        self.rival_model_weight_path = os.path.join(self.model_dir, "rival_weight.h5")
+        self.rival_model_weight_path = os.path.join(self.model_dir, "rival_weight.pth")
 
         self.play_data_dir = os.path.join(self.data_dir, "play_data")
         self.play_data_filename_tmpl = "play_%s.json"

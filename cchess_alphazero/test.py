@@ -292,15 +292,30 @@ def fixbug():
 
 
 def plot_model():
-    from keras.utils import plot_model
+    """
+    绘制模型结构图
+    
+    使用torchviz或其他工具可视化PyTorch模型
+    """
     from cchess_alphazero.agent.model import CChessModel
     from cchess_alphazero.config import Config
     from cchess_alphazero.lib.model_helper import save_as_best_model
+    import torch
+    
     config = Config('distribute')
     model = CChessModel(config)
     model.build()
     save_as_best_model(model)
-    plot_model(model.model, to_file='model.png', show_shapes=True, show_layer_names=True)
+    
+    # 打印模型结构
+    print("模型结构:")
+    print(model.model)
+    
+    # 计算模型参数数量
+    total_params = sum(p.numel() for p in model.model.parameters())
+    trainable_params = sum(p.numel() for p in model.model.parameters() if p.requires_grad)
+    print(f"总参数量: {total_params:,}")
+    print(f"可训练参数量: {trainable_params:,}")
 
 def test_check_and_catch():
     import cchess_alphazero.environment.static_env as senv

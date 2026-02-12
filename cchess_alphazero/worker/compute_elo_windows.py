@@ -63,8 +63,8 @@ class EvaluateWorker:
         logger.info(f"评测开始，基准模型：{self.data['base']['digest'][0:8]}, elo = {self.data['base']['elo']};"
                     f"待评测模型：{self.data['unchecked']['digest'][0:8]}")
         # weight path
-        base_weight_path = os.path.join(self.config.resource.next_generation_model_dir, self.data['base']['digest'] + '.h5')
-        ng_weight_path = os.path.join(self.config.resource.next_generation_model_dir, self.data['unchecked']['digest'] + '.h5')
+        base_weight_path = os.path.join(self.config.resource.next_generation_model_dir, self.data['base']['digest'] + '.pth')
+        ng_weight_path = os.path.join(self.config.resource.next_generation_model_dir, self.data['unchecked']['digest'] + '.pth')
         # load model
         model_base, hist_base = self.load_model(base_weight_path, self.data['base']['digest'])
         model_ng, hist_ng = self.load_model(ng_weight_path, self.data['unchecked']['digest'])
@@ -151,7 +151,7 @@ class EvaluateWorker:
             config_path = os.path.join(self.config.resource.model_dir, config_file)
         if (not load_model_weight(model, config_path, weight_path)) or model.digest != digest:
             logger.info(f"开始下载权重 {digest[0:8]}")
-            url = self.config.internet.download_base_url + digest + '.h5'
+            url = self.config.internet.download_base_url + digest + '.pth'
             download_file(url, weight_path)
             try:
                 if not load_model_weight(model, config_path, weight_path):

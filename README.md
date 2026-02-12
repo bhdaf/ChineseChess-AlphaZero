@@ -28,9 +28,55 @@ If you want to join us to build the best chinese chess AI in the world:
 
 ## Environment
 
-* Python 3.6.3
-* tensorflow-gpu: 1.3.0
-* Keras: 2.0.8
+* Python 3.6.3+
+* PyTorch: >= 1.9.0
+* torchvision: >= 0.10.0
+
+**Note**: This project was originally implemented with TensorFlow/Keras and has been migrated to PyTorch. All model weights are now saved in PyTorch format (`.pth`).
+
+
+## Project Structure
+
+```
+cchess_alphazero/
+├── agent/             # AI agent components
+│   ├── model.py       # Policy-Value network (ResNet + dual heads)
+│   ├── api.py         # Async batch inference API with pipe-based IPC
+│   └── player.py      # MCTS player implementation
+├── configs/           # Configuration presets
+│   ├── mini.py        # Lightweight config for testing/debugging
+│   ├── normal.py      # Standard training config
+│   └── distribute.py  # Distributed training config
+├── environment/       # Chinese chess game environment
+│   ├── env.py         # Game environment wrapper
+│   ├── static_env.py  # Static game logic functions
+│   ├── chessboard.py  # Chessboard representation
+│   ├── chessman.py    # Chess piece definitions
+│   └── lookup_tables.py # Move encoding/decoding tables
+├── lib/               # Utility libraries
+│   ├── data_helper.py # Training data I/O
+│   ├── model_helper.py# Model save/load helpers
+│   ├── tf_util.py     # Device configuration (PyTorch-compatible)
+│   ├── web_helper.py  # HTTP utilities for distributed mode
+│   ├── elo_helper.py  # Elo rating computation
+│   └── logger.py      # Logging setup
+├── play_games/        # Human vs AI gameplay
+│   ├── play.py        # GUI-based play (pygame)
+│   ├── play_cli.py    # CLI-based play
+│   └── ob_self_play.py# Observe self-play games
+├── worker/            # Training pipeline workers
+│   ├── self_play.py   # Self-play data generation
+│   ├── optimize.py    # RL training from self-play data
+│   ├── evaluator.py   # Model evaluation (best vs next-gen)
+│   ├── sl.py          # Supervised learning from game records
+│   ├── sl_onegreen.py # SL with OneGreen format data
+│   ├── compute_elo.py # Elo rating computation
+│   └── play_with_ucci_engine.py # Play against UCCI engines
+├── config.py          # Main configuration
+├── manager.py         # CLI entry point and command routing
+├── run.py             # Application entry point
+└── uci.py             # UCI protocol interface
+```
 
 
 ## Modules
@@ -66,16 +112,22 @@ You can choose different board/piece styles and sides, see [play with human](#pl
 
 ### Setup
 
-### install libraries
+#### Install libraries
 ```bash
 pip install -r requirements.txt
 ```
 
-If you want to use CPU only, replace `tensorflow-gpu` with `tensorflow` in `requirements.txt`.
+PyTorch will automatically use GPU (CUDA) if available, or fall back to CPU. No separate CPU/GPU package is needed — PyTorch handles device selection at runtime.
 
-Make sure Keras is using Tensorflow and you have Python 3.6.3+.
+Make sure you have Python 3.6.3+.
 
 ### Configuration
+
+There are three configuration presets available:
+
+* **mini** (`cchess_alphazero/configs/mini.py`): Lightweight settings for testing and debugging. Uses smaller batch sizes and fewer simulations.
+* **normal** (`cchess_alphazero/configs/normal.py`): Standard training configuration with full-sized network and longer training runs.
+* **distribute** (`cchess_alphazero/configs/distribute.py`): Configuration for distributed training with remote server synchronization.
 
 **PlayDataConfig**
 
@@ -130,7 +182,7 @@ optional arguments:
 python cchess_alphazero/run.py self
 ```
 
-When executed, self-play will start using BestModel. If the BestModel does not exist, new random model will be created and become BestModel. Self-play records will store in `data/play_record` and BestMode will store in `data/model`.
+When executed, self-play will start using BestModel. If the BestModel does not exist, new random model will be created and become BestModel. Self-play records will store in `data/play_record` and BestModel will store in `data/model`.
 
 options
 
@@ -140,7 +192,7 @@ options
 * `--ucci`: whether to play with ucci engine (rather than self play, see `cchess_alphazero/worker/play_with_ucci_engine.py`)
 * `--distributed`: run self play in distributed mode which means it will upload the play data to the remote server and download latest model from it
 
-**Note1**: To help training, you should run `python cchess_alphazero/run.py --type distribute --distributed self` (and do not change the configuration file `configs/distribute.py`), for more info, see [wiki](https://github.com/NeymarL/ChineseChess-AlphaZero/wiki/For-Developers).
+**Note1**: To help training, you should run `python cchess_alphazero/run.py --type distribute --distributed self` (and do not change the configuration file `cchess_alphazero/configs/distribute.py`), for more info, see [wiki](https://github.com/NeymarL/ChineseChess-AlphaZero/wiki/For-Developers).
 
 **Note2**: If you want to view the self-play records in GUI, see [wiki](https://github.com/NeymarL/ChineseChess-AlphaZero/wiki/View-self-play-games-in-GUI).
 
@@ -157,14 +209,6 @@ options
 * `--type mini`: use mini config, (see `cchess_alphazero/configs/mini.py`)
 * `--total-step TOTAL_STEP`: specify total step(mini-batch) numbers. The total step affects learning rate of training.
 * `--gpu '1'`: specify which gpu to use
-
-**View training log in Tensorboard**
-
-```
-tensorboard --logdir logs/
-```
-
-And access `http://<The Machine IP>:6006/`.
 
 ### Play with human
 
@@ -216,7 +260,7 @@ options
 python cchess_alphazero/run.py sl
 ```
 
-When executed, Training will start. The current SLBestModel will be loaded. Tranined model will be saved every epoch as new SLBestModel.
+When executed, Training will start. The current SLBestModel will be loaded. Trained model will be saved every epoch as new SLBestModel.
 
 *About the data*
 
@@ -228,3 +272,28 @@ options
 * `--gpu '1'`: specify which gpu to use
 * `--onegreen`: if set the flag, `sl_onegreen` worker will start to train data crawled from `game.onegreen.net`
 * `--skip SKIP`: if set this flag, games whoses index is less than `SKIP` would not be used to train (only valid when `onegreen` flag is set)
+
+
+## Changes from TensorFlow to PyTorch
+
+This project was migrated from TensorFlow/Keras to PyTorch. Below is a summary of the changes made and known issues.
+
+### Changes Made
+
+1. **Config import path fix**: The `mini` and `normal` config types used incorrect import paths (`import configs.mini` instead of `import cchess_alphazero.configs.mini`), causing `ModuleNotFoundError` when using `--type mini` or `--type normal`. This has been fixed.
+
+2. **Model weight file format**: All model weights now use PyTorch `.pth` format instead of Keras `.h5` format. File extension references in `compute_elo.py`, `compute_elo_windows.py`, and `config.py` have been updated accordingly.
+
+3. **`torch.load()` security**: Added `weights_only=True` parameter to `torch.load()` calls for security best practice, preventing arbitrary code execution from untrusted model files.
+
+4. **README update**: Updated environment requirements, added project structure documentation, and documented the migration changes.
+
+### Known Issues
+
+1. **Remote server compatibility**: The distributed training mode (`--distributed`) connects to remote servers (e.g., `cczero.org`, `download.52coding.com.cn`) that may still host model weights in the old `.h5` format. If the server has not been updated, downloading weights in distributed mode will fail. The server needs to be updated to serve `.pth` format files.
+
+2. **Legacy TensorFlow API surface (`tf_util.py`)**: The `set_session_config()` function in `lib/tf_util.py` is a compatibility shim that maps TensorFlow session configuration parameters to PyTorch equivalents. The `per_process_gpu_memory_fraction` and `allow_growth` parameters are no-ops in PyTorch (PyTorch manages GPU memory dynamically by default). This function is retained for API compatibility but only the `device_list` parameter has any effect (setting `CUDA_VISIBLE_DEVICES`).
+
+3. **No TensorBoard integration**: The original project supported viewing training logs in TensorBoard. The PyTorch migration does not include TensorBoard logging. Training progress is logged to files via Python logging instead.
+
+4. **Old model weight incompatibility**: Pre-existing model weights saved in Keras `.h5` format cannot be loaded by the PyTorch implementation. Models need to be retrained from scratch or weights need to be manually converted.

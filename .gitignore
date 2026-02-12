@@ -6,3 +6,5 @@ logs/*
 Icon*
 .vscode
 *.icloud
+simple_chess_ai/saved_model/*
+simple_chess_ai/train_data/*

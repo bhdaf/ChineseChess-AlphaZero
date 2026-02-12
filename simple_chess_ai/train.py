@@ -123,14 +123,22 @@ def self_play_game(model, num_simulations=100, max_moves=200,
         winner = 0
 
     # 生成训练数据：总奖励 = 最终胜负奖励 + γ * 累计子力奖励
+    # 从后向前累计每个玩家的子力奖励（O(n)）
+    n = len(material_rewards)
+    cumulative_red = [0.0] * (n + 1)
+    cumulative_black = [0.0] * (n + 1)
+    for j in range(n - 1, -1, -1):
+        cumulative_red[j] = cumulative_red[j + 1]
+        cumulative_black[j] = cumulative_black[j + 1]
+        if players[j] == 1:
+            cumulative_red[j] += material_rewards[j]
+        else:
+            cumulative_black[j] += material_rewards[j]
+
     training_data = []
     for i, (state, policy, player) in enumerate(zip(states, policies, players)):
         outcome_value = winner * player  # 从该玩家视角的胜负评估值
-        # 累计该玩家从第i步到结束的子力奖励
-        cumulative_material = 0.0
-        for j in range(i, len(material_rewards)):
-            if players[j] == player:
-                cumulative_material += material_rewards[j]
+        cumulative_material = cumulative_red[i] if player == 1 else cumulative_black[i]
         value = outcome_value + material_reward_gamma * cumulative_material
         training_data.append((state, policy, value))
 

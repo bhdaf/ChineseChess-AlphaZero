@@ -31,7 +31,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from simple_chess_ai.game import (
     ChessGame, NUM_ACTIONS, ACTION_LABELS, LABEL_TO_INDEX,
-    flip_move, flip_policy, fen_to_planes
+    flip_move, flip_policy, fen_to_planes, compute_material_reward
 )
 from simple_chess_ai.model import ChessModel
 from simple_chess_ai.mcts import MCTS
@@ -42,7 +42,8 @@ DEFAULT_MODEL_PATH = os.path.join(DEFAULT_MODEL_DIR, 'model.pth')
 DEFAULT_DATA_DIR = os.path.join(os.path.dirname(__file__), 'train_data')
 
 
-def self_play_game(model, num_simulations=100, max_moves=200, temperature_threshold=30):
+def self_play_game(model, num_simulations=100, max_moves=200,
+                   temperature_threshold=30, material_reward_gamma=0.1):
     """
     执行一局自对弈
 
@@ -51,6 +52,7 @@ def self_play_game(model, num_simulations=100, max_moves=200, temperature_thresh
         num_simulations: MCTS模拟次数
         max_moves: 最大步数（超过判和）
         temperature_threshold: 前N步使用温度1.0探索
+        material_reward_gamma: 子力奖励的融合系数（γ）
 
     Returns:
         training_data: [(state_planes, policy_target, value_target), ...]
@@ -62,6 +64,7 @@ def self_play_game(model, num_simulations=100, max_moves=200, temperature_thresh
     states = []
     policies = []
     players = []  # 记录每步的走子方
+    material_rewards = []  # 记录每步的子力奖励
 
     move_count = 0
 
@@ -86,6 +89,10 @@ def self_play_game(model, num_simulations=100, max_moves=200, temperature_thresh
         policies.append(policy_target)
         players.append(1 if game.red_to_move else -1)
 
+        # 记录走子前的子力分数
+        prev_red, prev_black = game.compute_material_score()
+        is_red_moving = game.red_to_move
+
         # 按概率选择走法
         action_idx = np.random.choice(len(actions), p=probs)
         chosen_action = actions[action_idx]
@@ -98,6 +105,13 @@ def self_play_game(model, num_simulations=100, max_moves=200, temperature_thresh
         game.step(actual_action)
         mcts.update_with_move(chosen_action)
 
+        # 计算该步的子力奖励
+        curr_red, curr_black = game.compute_material_score()
+        step_reward = compute_material_reward(
+            prev_red, prev_black, curr_red, curr_black, is_red_moving
+        )
+        material_rewards.append(step_reward)
+
         move_count += 1
 
     # 确定胜负
@@ -108,10 +122,16 @@ def self_play_game(model, num_simulations=100, max_moves=200, temperature_thresh
     else:
         winner = 0
 
-    # 生成训练数据
+    # 生成训练数据：总奖励 = 最终胜负奖励 + γ * 累计子力奖励
     training_data = []
-    for state, policy, player in zip(states, policies, players):
-        value = winner * player  # 从该玩家视角的评估值
+    for i, (state, policy, player) in enumerate(zip(states, policies, players)):
+        outcome_value = winner * player  # 从该玩家视角的胜负评估值
+        # 累计该玩家从第i步到结束的子力奖励
+        cumulative_material = 0.0
+        for j in range(i, len(material_rewards)):
+            if players[j] == player:
+                cumulative_material += material_rewards[j]
+        value = outcome_value + material_reward_gamma * cumulative_material
         training_data.append((state, policy, value))
 
     return training_data, game.winner, move_count
@@ -285,10 +305,12 @@ def run_training(num_games=50, num_simulations=100, num_epochs=5,
                 from simple_chess_ai.grpo import generate_grpo_training_data
                 grpo_game = ChessGame()
                 grpo_game.reset()
-                grpo_states, grpo_masks = generate_grpo_training_data(
+                grpo_states, grpo_masks, grpo_games = generate_grpo_training_data(
                     model, grpo_game
                 )
-                grpo_metrics = grpo_trainer.train_step(grpo_states, grpo_masks)
+                grpo_metrics = grpo_trainer.train_step(
+                    grpo_states, grpo_masks, games=grpo_games
+                )
                 print(f"  GRPO训练完成，损失: {grpo_metrics['loss']:.4f}, "
                       f"策略损失: {grpo_metrics['policy_loss']:.4f}")
             else:

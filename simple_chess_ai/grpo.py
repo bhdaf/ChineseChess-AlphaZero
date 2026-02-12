@@ -18,7 +18,7 @@ import torch.nn.functional as F
 
 from simple_chess_ai.game import (
     ChessGame, NUM_ACTIONS, ACTION_LABELS, LABEL_TO_INDEX,
-    flip_move, flip_policy
+    flip_move, flip_policy, PIECE_VALUES, compute_material_reward
 )
 
 
@@ -114,17 +114,18 @@ class GRPOTrainer:
         advantages = (rewards - group_mean) / group_std
         return advantages
 
-    def evaluate_actions(self, model, states, actions):
+    def evaluate_actions(self, model, states, actions, games=None):
         """
-        评估采样动作的价值
+        评估采样动作的价值（含子力奖励）
 
         使用策略价值网络的价值头来估算每个动作的预期收益，
-        而非使用单独的 Critic 网络。
+        并结合模拟走子产生的子力奖励。
 
         Args:
             model: ChessModel 实例
             states: (batch, 14, 10, 9) 棋盘特征
             actions: (batch, group_size) 动作索引
+            games: 可选，ChessGame 实例列表，用于模拟走子计算子力奖励
 
         Returns:
             rewards: (batch, group_size) 估算的收益
@@ -146,9 +147,33 @@ class GRPOTrainer:
             action_log_probs = log_policy.gather(1, action_indices.unsqueeze(1)).squeeze(1)
             rewards[:, g] = value.squeeze(-1) + action_log_probs
 
+        # 如果提供了游戏实例，计算子力奖励并融入
+        if games is not None:
+            for b in range(min(batch_size, len(games))):
+                game = games[b]
+                prev_red, prev_black = game.compute_material_score()
+                is_red = game.red_to_move
+                for g in range(group_size):
+                    action_idx = actions[b, g].item()
+                    action_str = ACTION_LABELS[action_idx]
+                    # 模拟走子
+                    sim_game = game.copy()
+                    if not is_red:
+                        action_str = flip_move(action_str)
+                    legal_moves = sim_game.get_legal_moves()
+                    if action_str in legal_moves:
+                        sim_game.step(action_str)
+                        curr_red, curr_black = sim_game.compute_material_score()
+                        mat_reward = compute_material_reward(
+                            prev_red, prev_black,
+                            curr_red, curr_black,
+                            is_red
+                        )
+                        rewards[b, g] += mat_reward
+
         return rewards
 
-    def train_step(self, states, legal_masks, old_log_probs=None):
+    def train_step(self, states, legal_masks, old_log_probs=None, games=None):
         """
         执行一步 GRPO 训练
 
@@ -156,6 +181,7 @@ class GRPOTrainer:
             states: numpy array (batch, 14, 10, 9) 棋盘特征
             legal_masks: numpy array (batch, NUM_ACTIONS) 合法走法掩码
             old_log_probs: 可选，旧策略的 log 概率（用于重要性采样）
+            games: 可选，ChessGame 实例列表，用于计算子力奖励
 
         Returns:
             dict: 包含 loss, policy_loss, kl_loss 的训练指标
@@ -180,8 +206,10 @@ class GRPOTrainer:
                 policy_logits, legal_masks
             )
 
-            # 3. 评估动作价值
-            rewards = self.evaluate_actions(self.model, states, sampled_actions)
+            # 3. 评估动作价值（含子力奖励）
+            rewards = self.evaluate_actions(
+                self.model, states, sampled_actions, games=games
+            )
 
             # 4. 计算组内相对优势
             advantages = self.compute_group_advantage(rewards)
@@ -239,12 +267,15 @@ def generate_grpo_training_data(model, game, num_simulations=50):
     Returns:
         states: 棋盘特征列表
         legal_masks: 合法走法掩码列表
+        games: ChessGame 实例列表（用于子力奖励计算）
     """
     states = []
     legal_masks = []
+    games = []
 
     planes = game.to_planes()
     states.append(planes)
+    games.append(game.copy())
 
     # 生成合法走法掩码
     legal_moves = game.get_legal_moves()
@@ -257,4 +288,4 @@ def generate_grpo_training_data(model, game, num_simulations=50):
             mask[LABEL_TO_INDEX[move]] = 1.0
     legal_masks.append(mask)
 
-    return np.array(states), np.array(legal_masks)
+    return np.array(states), np.array(legal_masks), games

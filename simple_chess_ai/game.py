@@ -20,6 +20,20 @@
 import numpy as np
 import copy
 
+# 棋子价值字典（用于子力奖励计算）
+PIECE_VALUES = {
+    'P': 1.0, 'p': 1.0,      # 兵/卒
+    'A': 2.0, 'a': 2.0,      # 仕/士
+    'B': 2.0, 'b': 2.0,      # 象/相
+    'N': 4.0, 'n': 4.0,      # 马
+    'C': 4.5, 'c': 4.5,      # 炮
+    'R': 9.0, 'r': 9.0,      # 车
+    'K': 0.0, 'k': 0.0,      # 将/帅（不计入子力）
+}
+
+# 子力奖励缩放的最大子力差（用于归一化到 [-0.5, 0.5]）
+MAX_MATERIAL_DIFF = 51.0  # 所有可吃棋子的总价值: 2*9 + 2*4.5 + 2*4 + 2*2 + 2*2 + 5*1 = 48, 取51留余量
+
 # 棋子类型索引映射（用于神经网络输入平面）
 PIECE_TO_INDEX = {
     'P': 0, 'p': 0,  # 兵/卒
@@ -477,6 +491,27 @@ class ChessGame:
         fen = self.get_observation()
         return fen_to_planes(fen)
 
+    def compute_material_score(self):
+        """
+        计算当前局面的子力分数
+
+        Returns:
+            red_score: 红方子力总分
+            black_score: 黑方子力总分
+        """
+        red_score = 0.0
+        black_score = 0.0
+        for y in range(BOARD_HEIGHT):
+            for x in range(BOARD_WIDTH):
+                piece = self.board[y][x]
+                if piece is not None:
+                    value = PIECE_VALUES.get(piece, 0.0)
+                    if piece.isupper():
+                        red_score += value
+                    else:
+                        black_score += value
+        return red_score, black_score
+
     def print_board(self):
         """打印棋盘到控制台"""
         print("  0 1 2 3 4 5 6 7 8")
@@ -511,3 +546,38 @@ def fen_to_planes(fen):
                 planes[idx][y][x] = 1
                 x += 1
     return planes
+
+
+def compute_material_reward(prev_red_score, prev_black_score,
+                            curr_red_score, curr_black_score,
+                            is_red_moving):
+    """
+    计算一步走子的增量子力奖励
+
+    根据走子前后双方子力差的变化，计算当前走子方的子力奖励。
+    吃掉对方棋子得正分，己方被吃得负分（体现在下一步对方走子时）。
+    奖励值缩放到 [-0.5, 0.5] 之间。
+
+    Args:
+        prev_red_score: 走子前红方子力总分
+        prev_black_score: 走子前黑方子力总分
+        curr_red_score: 走子后红方子力总分
+        curr_black_score: 走子后黑方子力总分
+        is_red_moving: 走子方是否为红方
+
+    Returns:
+        reward: 缩放后的子力奖励，范围 [-0.5, 0.5]
+    """
+    # 从当前走子方视角计算子力差的变化
+    if is_red_moving:
+        prev_diff = prev_red_score - prev_black_score
+        curr_diff = curr_red_score - curr_black_score
+    else:
+        prev_diff = prev_black_score - prev_red_score
+        curr_diff = curr_black_score - curr_red_score
+
+    delta = curr_diff - prev_diff
+
+    # 缩放到 [-0.5, 0.5]
+    reward = np.clip(delta / MAX_MATERIAL_DIFF, -0.5, 0.5)
+    return float(reward)

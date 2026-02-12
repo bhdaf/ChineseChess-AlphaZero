@@ -10,7 +10,8 @@ import numpy as np
 from simple_chess_ai.game import (
     ChessGame, ACTION_LABELS, LABEL_TO_INDEX, NUM_ACTIONS,
     BOARD_HEIGHT, BOARD_WIDTH, INIT_FEN, fen_to_planes,
-    flip_move, flip_policy
+    flip_move, flip_policy, PIECE_VALUES, MAX_MATERIAL_DIFF,
+    compute_material_reward
 )
 from simple_chess_ai.model import ChessModel
 from simple_chess_ai.mcts import MCTS, MCTSNode
@@ -365,6 +366,87 @@ class TestGameCopy(unittest.TestCase):
         self.assertEqual(copy.board[1][4], 'K')
 
 
+class TestMaterialReward(unittest.TestCase):
+    """测试子力奖励"""
+
+    def test_piece_values_defined(self):
+        """测试棋子价值字典已定义"""
+        self.assertIn('R', PIECE_VALUES)
+        self.assertIn('r', PIECE_VALUES)
+        self.assertIn('K', PIECE_VALUES)
+        self.assertEqual(PIECE_VALUES['R'], 9.0)
+        self.assertEqual(PIECE_VALUES['P'], 1.0)
+        self.assertEqual(PIECE_VALUES['K'], 0.0)
+
+    def test_compute_material_score_initial(self):
+        """测试初始局面子力分数对称"""
+        game = ChessGame()
+        game.reset()
+        red_score, black_score = game.compute_material_score()
+        self.assertEqual(red_score, black_score)
+        self.assertGreater(red_score, 0)
+
+    def test_compute_material_score_after_capture(self):
+        """测试吃子后子力分数变化"""
+        game = ChessGame()
+        game.board = [[None] * BOARD_WIDTH for _ in range(BOARD_HEIGHT)]
+        game.board[0][4] = 'K'
+        game.board[9][4] = 'k'
+        game.board[5][0] = 'R'   # 红车
+        game.board[6][0] = 'p'   # 黑卒
+        game.red_to_move = True
+        red_before, black_before = game.compute_material_score()
+        self.assertEqual(red_before, 9.0)   # 车
+        self.assertEqual(black_before, 1.0)  # 卒
+
+    def test_material_reward_capture(self):
+        """测试吃子时子力奖励为正"""
+        # 红方吃掉黑方的卒（价值1.0）
+        reward = compute_material_reward(
+            prev_red_score=9.0, prev_black_score=10.0,
+            curr_red_score=9.0, curr_black_score=9.0,
+            is_red_moving=True
+        )
+        self.assertGreater(reward, 0)
+
+    def test_material_reward_lose_piece(self):
+        """测试丢子时子力奖励为负"""
+        # 黑方吃掉红方的车（价值9.0）
+        reward = compute_material_reward(
+            prev_red_score=18.0, prev_black_score=9.0,
+            curr_red_score=9.0, curr_black_score=9.0,
+            is_red_moving=False
+        )
+        self.assertGreater(reward, 0)  # 从黑方视角，吃掉红车是正收益
+        # 但从红方视角，丢掉车是负收益
+        reward_red = compute_material_reward(
+            prev_red_score=18.0, prev_black_score=9.0,
+            curr_red_score=9.0, curr_black_score=9.0,
+            is_red_moving=True
+        )
+        self.assertLess(reward_red, 0)
+
+    def test_material_reward_no_capture(self):
+        """测试无吃子时子力奖励为零"""
+        reward = compute_material_reward(
+            prev_red_score=10.0, prev_black_score=10.0,
+            curr_red_score=10.0, curr_black_score=10.0,
+            is_red_moving=True
+        )
+        self.assertAlmostEqual(reward, 0.0)
+
+    def test_material_reward_scaling(self):
+        """测试子力奖励缩放到[-0.5, 0.5]"""
+        # Even extreme cases should be within bounds
+        reward = compute_material_reward(
+            prev_red_score=50.0, prev_black_score=50.0,
+            curr_red_score=50.0, curr_black_score=0.0,
+            is_red_moving=True
+        )
+        self.assertGreaterEqual(reward, -0.5)
+        self.assertLessEqual(reward, 0.5)
+
+
 class TestGRPO(unittest.TestCase):
     """测试GRPO训练器"""
 
@@ -398,9 +480,9 @@ class TestGRPO(unittest.TestCase):
         from simple_chess_ai.grpo import GRPOTrainer, generate_grpo_training_data
         game = ChessGame()
         game.reset()
-        states, masks = generate_grpo_training_data(self.model, game)
+        states, masks, games = generate_grpo_training_data(self.model, game)
         trainer = GRPOTrainer(self.model, group_size=4, lr=1e-4)
-        metrics = trainer.train_step(states, masks)
+        metrics = trainer.train_step(states, masks, games=games)
         self.assertIn('loss', metrics)
         self.assertIn('policy_loss', metrics)
         self.assertIn('kl_loss', metrics)
@@ -410,11 +492,14 @@ class TestGRPO(unittest.TestCase):
         from simple_chess_ai.grpo import generate_grpo_training_data
         game = ChessGame()
         game.reset()
-        states, masks = generate_grpo_training_data(self.model, game)
+        states, masks, games = generate_grpo_training_data(self.model, game)
         self.assertEqual(states.shape[1:], (14, 10, 9))
         self.assertEqual(masks.shape[1], NUM_ACTIONS)
         # 合法走法掩码应有非零值
         self.assertGreater(masks.sum(), 0)
+        # 应返回游戏实例列表
+        self.assertEqual(len(games), 1)
+        self.assertIsInstance(games[0], ChessGame)
 
 
 class TestGNN(unittest.TestCase):

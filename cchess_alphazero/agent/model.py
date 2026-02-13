@@ -313,7 +313,7 @@ class CChessModel:
             
             try:
                 # 加载权重到指定设备
-                state_dict = torch.load(weight_path, map_location=self.device)
+                state_dict = torch.load(weight_path, map_location=self.device, weights_only=True)
                 self.model.load_state_dict(state_dict)
                 self.model.eval()  # 设置为评估模式
                 self.digest = self.fetch_digest(weight_path)

@@ -16,9 +16,9 @@ class Config:
         self.internet = InternetConfig()
 
         if config_type == "mini":
-            import configs.mini as c
+            import cchess_alphazero.configs.mini as c
         elif config_type == "normal":
-            import configs.normal as c
+            import cchess_alphazero.configs.normal as c
         elif config_type == 'distribute':
             import cchess_alphazero.configs.distribute as c
         else:
@@ -109,9 +109,8 @@ class InternetConfig:
     """
     网络配置类
     
-    注意：远程服务器的模型权重URL可能需要更新为.pth格式，
-    或者在下载后进行格式转换。当前URL指向.h5格式是为了
-    兼容现有服务器，本地保存时会转换为.pth格式。
+    注意：远程服务器可能尚未更新为.pth格式的权重文件。
+    如果服务器仍使用旧格式(.h5)，需要在服务器端更新权重文件格式。
     """
     def __init__(self):
         self.distributed = False
@@ -119,9 +118,7 @@ class InternetConfig:
         self.base_url = 'https://cczero.org'
         self.upload_url = f'{self.base_url}/api/upload_game_file/192x10'
         self.upload_eval_url = f'{self.base_url}/api/upload_eval_game_file'
-        # 注意：远程服务器URL可能需要更新为.pth格式
-        # 或者需要实现权重格式转换功能
-        self.download_url = f'http://download.52coding.com.cn/192x10/model_best_weight.h5'
+        self.download_url = f'http://download.52coding.com.cn/192x10/model_best_weight.pth'
         self.get_latest_digest = f'{self.base_url}/api/get_latest_digest/192x10'
         self.add_model_url = f'{self.base_url}/api/add_model'
         self.get_evaluate_model_url = f'{self.base_url}/api/query_for_evaluate'

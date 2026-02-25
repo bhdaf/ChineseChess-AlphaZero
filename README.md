@@ -228,3 +228,123 @@ options
 * `--gpu '1'`: specify which gpu to use
 * `--onegreen`: if set the flag, `sl_onegreen` worker will start to train data crawled from `game.onegreen.net`
 * `--skip SKIP`: if set this flag, games whoses index is less than `SKIP` would not be used to train (only valid when `onegreen` flag is set)
+
+---
+
+## Simple Chess AI (`simple_chess_ai`)
+
+`simple_chess_ai` 是一个轻量级、自包含的中国象棋AI模块，基于PyTorch，无需Keras/TensorFlow即可独立运行。适合在普通CPU/GPU机器上快速训练与调试。
+
+### 特性
+
+- **完整象棋规则**：实现所有棋子移动规则，包括长将判负、**长捉判负**（perpetual chase）、三次重复局面判和等。
+- **策略价值网络**：残差卷积网络（支持纯CNN或GNN后端），输入14通道特征平面，输出走法概率与局面价值。
+- **MCTS搜索**：PUCT算法驱动，支持Dirichlet噪声、树复用（Tree Reuse）、局面缓存。
+- **多种训练模式**：标准AlphaZero式自对弈训练、GRPO（Group Relative Policy Optimization）训练、FP16混合精度训练。
+- **Gating评测**：定期用新模型与旧模型对局，胜率超过阈值后替换best模型。
+- **数据导出**：自对弈记录（JSONL）、训练指标（CSV）、损失/胜率曲线（PNG）。
+- **图形界面**：基于pygame的可交互棋盘（`python -m simple_chess_ai play`）。
+- **命令行界面**：纯文本人机对弈（`python -m simple_chess_ai play_cli`）。
+- **Reasoning模块**：链式推理（Chain-of-Thought）增强的走法分析。
+
+### 快速开始
+
+#### 安装依赖
+
+```bash
+pip install torch numpy
+pip install pygame  # 仅图形界面需要
+```
+
+#### 训练模型
+
+```bash
+# 标准训练（50局自对弈）
+python -m simple_chess_ai train --num_games 50 --num_simulations 100
+
+# GRPO训练模式
+python -m simple_chess_ai train --num_games 50 --use_grpo --grpo_group_size 8
+
+# FP16混合精度训练（需要GPU）
+python -m simple_chess_ai train --num_games 100 --use_fp16
+
+# 快速验证训练流程
+python -m simple_chess_ai train --quick
+```
+
+完整训练选项：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--num_games` | 50 | 自对弈局数 |
+| `--num_simulations` | 100 | 每步MCTS模拟次数 |
+| `--num_epochs` | 5 | 每次训练轮数 |
+| `--batch_size` | 256 | 批大小 |
+| `--lr` | 0.001 | 学习率 |
+| `--max_moves` | 200 | 每局最大步数（超过判和）|
+| `--buffer_size` | 10000 | 训练数据缓冲区大小 |
+| `--model_path` | — | 模型保存路径（默认 `simple_chess_ai/saved_model/model.pth`）|
+| `--save_interval` | 10 | 每隔多少局保存模型 |
+| `--use_grpo` | — | 使用GRPO训练模式 |
+| `--grpo_group_size` | 8 | GRPO组采样大小 |
+| `--use_fp16` | — | FP16混合精度训练 |
+| `--gating_interval` | 20 | 每隔多少局进行gating评测（0=禁用）|
+| `--gating_games` | 20 | gating对局数 |
+| `--gating_winrate` | 0.55 | gating接受阈值（新模型最低胜率）|
+| `--seed` | — | 随机种子（可复现）|
+| `--deterministic` | — | cuDNN确定性模式（配合`--seed`）|
+| `--runs_dir` | — | 日志导出目录（默认 `simple_chess_ai/runs/`）|
+| `--quick` | — | 快速模式（1局+1次更新，验证流程）|
+
+#### 图形界面对弈
+
+```bash
+python -m simple_chess_ai play [--model_path path/to/model.pth] [--num_simulations 200]
+```
+
+#### 命令行对弈
+
+```bash
+python -m simple_chess_ai play_cli [--model_path path/to/model.pth] [--num_simulations 200] [--human_color red|black]
+```
+
+走法格式：`x0 y0 x1 y1`，例如 `4 0 4 1` 表示帅从(4,0)向前走一步。
+
+### 象棋规则说明
+
+坐标系：x 为列(0–8)，y 为行(0–9)；红方在下方(y=0–4)，黑方在上方(y=5–9)。
+
+棋子FEN编码：
+- 大写=红方：`R`(车) `N`(马) `B`(象) `A`(仕) `K`(帅) `C`(炮) `P`(兵)
+- 小写=黑方：`r`(车) `n`(马) `b`(象) `a`(仕) `k`(将) `c`(炮) `p`(卒)
+
+重复局面处理：
+- **长将**（perpetual check）：循环内一方连续将军维持循环 → 该方判负
+- **长捉**（perpetual chase）：循环内一方始终用棋子威胁吃对方某一非将棋子，而对方无捉回 → 捉子方判负
+- **三次重复且无长将/长捉**：判和
+
+### 运行测试
+
+```bash
+python -m pytest simple_chess_ai/tests.py -v
+```
+
+### 模块结构
+
+```
+simple_chess_ai/
+├── game.py           # 象棋规则、走法生成、长将/长捉判断
+├── model.py          # 策略价值网络（CNN + 残差块）
+├── mcts.py           # MCTS搜索（PUCT算法）
+├── train.py          # 自对弈训练流程
+├── grpo.py           # GRPO训练器
+├── gnn_feature.py    # 图神经网络特征提取
+├── reasoning.py      # 链式推理模块
+├── reasoning_cli.py  # 推理CLI界面
+├── action_encoding.py# 动作编码/解码
+├── export.py         # 数据与图表导出
+├── gui.py            # pygame图形界面
+├── cli.py            # 命令行对弈界面
+├── tests.py          # 单元测试
+└── __main__.py       # 模块主入口
+```
